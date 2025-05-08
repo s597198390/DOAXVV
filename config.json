@@ -1,0 +1,10 @@
+{
+    "battle": {
+        "retry_interval": 2,
+        "confidence_thresholds": {
+            "continue.png": 0.4,
+            "default": 0.8
+        },
+        "battle_duration": 120
+    }
+}
