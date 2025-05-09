@@ -54,20 +54,35 @@ class ImageFinder():
     def __init__(self, config: Dict):
         self.config = config
 
+    def _load_image(self, img_name: str) -> Optional[np.ndarray]:
+        """封装图片加载逻辑"""
+        if img_name in self._IMAGE_CACHE:
+            return self._IMAGE_CACHE[img_name]
+            
+        img_path = os.path.join('images', img_name)
+        if not os.path.exists(img_path):
+            logging.error(f"图片路径不存在: {img_path}")
+            self._IMAGE_CACHE[img_name] = None
+            return None
+
+        try:
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            if img is None:
+                raise ValueError("OpenCV无法解码图像")
+            self._IMAGE_CACHE[img_name] = img
+            return img
+        except Exception as e:
+            logging.error(f"图片加载失败 [{img_path}]: {str(e)}")
+            self._IMAGE_CACHE[img_name] = None  # 缓存加载失败状态
+            return None
+
     @TimingController.delay(pre_delay=0.5)
     def find_image(self, img_name: str) -> Optional[Tuple[int, int]]:
         """基础查找方法"""
-        if img_name not in self._IMAGE_CACHE:
-            img_path = os.path.join('images', img_name)
-            if not os.path.exists(img_path):
-                logging.error(f"图片不存在: {img_path}")
-                return None
-            try:
-                self._IMAGE_CACHE[img_name] = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2GRAY)
-            except Exception as e:
-                logging.error(f"图片加载失败: {str(e)}")
-                return None
-        
+        image = self._load_image(img_name)
+        if image is None:
+            return None  # 已记录错误，直接返回
+           
         try:
             confidence = self.config['battle']['confidence_thresholds'].get(
                 img_name, self.config['battle']['confidence_thresholds']['default']
@@ -83,15 +98,24 @@ class ImageFinder():
             return None
 
     @TimingController.delay()
-    def find_with_retry(self, img_name: str, max_attempts: int = 3, **kwargs) -> Optional[Tuple[int, int]]:
-        """带重试的查找"""
+    def find_with_retry(self, 
+                      img_name: str, 
+                      max_attempts: int = 3,
+                      base_interval: float = None,
+                      **kwargs) -> Optional[Tuple[int, int]]:
+        """优化重试机制：指数退避+随机扰动"""
+        interval = base_interval or self.config['battle'].get('retry_interval', 1)
+        
         for attempt in range(1, max_attempts + 1):
-            # 正确传递参数（自动过滤时间参数）
             if position := self.find_image(img_name):
-                logging.info(f"第 {attempt} 次尝试成功找到 {img_name}")
+                logging.info(f"成功找到 {img_name} (第{attempt}次)")
                 return position
-            logging.debug(f"第 {attempt} 次查找 {img_name} 失败")
-            time.sleep(self.config['battle'].get('retry_interval', 1))
+                
+            # 指数退避算法：2^attempt * base + random
+            sleep_time = (2 ** attempt) * interval + random.uniform(-0.2, 0.2)
+            logging.debug(f"等待 {sleep_time:.2f}s 后重试")
+            time.sleep(max(sleep_time, 0.1))  # 保证最小等待时间
+            
         return None
 
 class ClickExecutor():
@@ -257,7 +281,7 @@ class GameAuto:
         self.clicker.execute_click(self.origin_pos, 
                                  offset_x=200, 
                                  offset_y=200,
-                                 pre_delay=2.0)
+                                 pre_delay=1.0)
         # 重复点击一次防止之前没点击成功
         self.clicker.execute_click(self.origin_pos, 
                                  offset_x=200, 
@@ -278,12 +302,14 @@ class GameAuto:
                                       pre_delay=1.5)
         self.smart_click('result.png', pre_delay=1.0)
         if self.finder.find_with_retry('huodong.png', max_attempts=2, pre_delay=1.0):
-            self.smart_click('ok.png', pre_delay=1.0)
+            self.smart_click('ok.png', pre_delay=1.0, max_attempts=2)
+        if self.finder.find_with_retry('level.png', max_attempts=2, pre_delay=1.0):
+            self.smart_click('ok.png', pre_delay=1.0, max_attempts=2)
         self.smart_click('result.png', pre_delay=1.0)
-        self.smart_click('exrpensive.png', pre_delay=1.0)
-        self.smart_click('exrpensive.png', pre_delay=1.0)
-        self.smart_click('watch.png', pre_delay=1.0)
-        time.sleep(4)
+        self.smart_click('expensive.png', pre_delay=1.5)
+        # self.smart_click('expensive.png', pre_delay=1.5)
+        self.smart_click('watch.png', max_attempts=2, pre_delay=1.0)
+        time.sleep(3)
     def _process_normal_battle(self):
         """正常战斗流程"""
         duration = self.cfg['battle'].get('battle_duration', 80)
