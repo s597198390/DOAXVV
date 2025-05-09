@@ -82,7 +82,7 @@ class ImageFinder(TimingController):
             logging.error(f"图像查找异常:{img_name} {str(e)}")
             return None
 
-    @TimingController.delay(post_delay=1.0)
+    @TimingController.delay()
     def find_with_retry(self, img_name: str, max_attempts: int = 3, **kwargs) -> Optional[Tuple[int, int]]:
         """带重试的查找"""
         for attempt in range(1, max_attempts + 1):
@@ -222,7 +222,7 @@ class GameAuto:
     def _battle_cycle(self):
         """完整的战斗周期"""
         # 进入配队界面（带自定义时间参数）
-        if self._process_phase('select_start.png', "配队界面", pre_delay=2.0):
+        if self._process_phase('select_start.png', "配队界面", pre_delay=1.0):
             if self._process_battle_start():
                 self._handle_battle_result()
 
@@ -257,12 +257,12 @@ class GameAuto:
         self.clicker.execute_click(self.origin_pos, 
                                  offset_x=200, 
                                  offset_y=200,
-                                 pre_delay=2.5)
+                                 pre_delay=2.0)
         # 重复点击一次防止之前没点击成功
         self.clicker.execute_click(self.origin_pos, 
                                  offset_x=200, 
                                  offset_y=200,
-                                 pre_delay=2.5)
+                                 pre_delay=2.0)
 
         if self.smart_click('battle_skip.png', post_delay=1.0):
             self._process_skip_battle()
@@ -271,23 +271,19 @@ class GameAuto:
 
     def _process_skip_battle(self):
         """跳过战斗处理"""
-        self.smart_click('ok.png', pre_delay=1.0, post_delay=1.0)
+        self.smart_click('ok.png', post_delay=1.0)
         self.clicker.execute_click(self.origin_pos, 
                                       offset_x=160, 
                                       offset_y=100,
                                       pre_delay=1.5)
         self.smart_click('result.png', pre_delay=1.0)
+        if self.finder.find_with_retry('huodong.png', max_attempts=2, pre_delay=1.0):
+            self.smart_click('ok.png', pre_delay=1.0)
         self.smart_click('result.png', pre_delay=1.0)
-        self.smart_click('ok.png', pre_delay=1.0)
         self.smart_click('exrpensive.png', pre_delay=1.0)
         self.smart_click('exrpensive.png', pre_delay=1.0)
-        # for _ in range(10):
-        #     self.clicker.execute_click(self.origin_pos, 
-        #                              offset_x=160, 
-        #                              offset_y=100,
-        #                              pre_delay=1.5)
+        self.smart_click('watch.png', pre_delay=1.0)
         time.sleep(4)
-
     def _process_normal_battle(self):
         """正常战斗流程"""
         duration = self.cfg['battle'].get('battle_duration', 80)
