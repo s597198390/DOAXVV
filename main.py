@@ -48,7 +48,7 @@ class TimingController:
         return decorator
 
 # ==================== 核心功能模块 ====================
-class ImageFinder(TimingController):
+class ImageFinder():
     _IMAGE_CACHE: Dict[str, np.ndarray] = {}
     
     def __init__(self, config: Dict):
@@ -94,7 +94,7 @@ class ImageFinder(TimingController):
             time.sleep(self.config['battle'].get('retry_interval', 1))
         return None
 
-class ClickExecutor(TimingController):
+class ClickExecutor():
     def __init__(self, config: Dict):
         self.config = config
         self._CLICK_OFFSET = 5
